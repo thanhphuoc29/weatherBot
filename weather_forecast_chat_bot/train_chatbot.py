@@ -3,7 +3,7 @@ from chatterbot.trainers import ChatterBotCorpusTrainer
 import chatterbot.corpus
 import sys
 import requests
-import datetime
+from datetime import datetime, timedelta
 import json
 from PIL import Image
 from io import BytesIO
@@ -39,7 +39,7 @@ def weatherToday():
         current_temperature = city_res["temp"]
         current_pressure = city_res["pressure"]
         current_humidity = city_res["humidity"]
-        now = datetime.datetime.now()
+        now = datetime.now()
         content = """
         Hôm nay là ngày {day} tháng {month} năm {year}
         Nhiệt độ trung bình là {temp} độ C
@@ -52,46 +52,64 @@ def weatherToday():
     print(content)
 
 
-def weatherForcast():
-    api_key = "fe8d8c65cf345889139d8e545f57819a"
+def PastWeather():
+   location = input('Nhập tên thành phố: ')
+   num = input('Bạn muốn xem thời tiết cách đây mấy ngày ạ ^^!: ')
+   today = datetime.now()
+   past_date = today - timedelta(days=int(num))
+   timestamp = int(past_date.timestamp())
+   url = f'http://api.openweathermap.org/data/2.5/weather?q={location}&appid={api_key}&units=metric&dt={timestamp}'
+   response = requests.get(url)
+   data = response.json()
+   if response.status_code == 200:
+        api_data = response.json()
+        weather = api_data["weather"][0]["description"]
+        temp = api_data["main"]["temp"]
+        pressure = api_data["main"]["pressure"]
+        humidity = api_data["main"]["humidity"]
+        print(f"Thời tiết ngày {past_date.strftime('%d-%m-%Y')} tại {location}:\nNhiệt độ trung bình là {temp}°C\nÁp suất không khí là {pressure} hPa\nĐộ ẩm là {humidity}%.")
+   else:
+       print("Không tìm thấy địa chỉ theo yêu cầu")
+        
+    
+    
 
-# Địa điểm và thời gian để lấy thông tin dự báo thời tiết
-    city = input('Nhập thành phố: ')
-    # Lấy thông tin dự báo thời tiết của 5 ngày tiếp theo
-
-    # URL của OpenWeatherMap API để lấy thông tin dự báo thời tiết
-    url = f'http://api.openweathermap.org/data/2.5/forecast?q={city}&appid={api_key}&units=metric'
-
-    # Gọi API và lấy dữ liệu JSON
-    response = requests.get(url)
-    data = json.loads(response.text)
-
-    # In ra thông tin dự báo thời tiết
-    forecast = []
-
-    for item in data['list']:
-        dt_txt = item['dt_txt']
-        if dt_txt.endswith('12:00:00'):
-            weather = {
-                'date': dt_txt[:10],
-                'temp': item['main']['temp'],
-                'description': item['weather'][0]['description'],
-                'icon': item['weather'][0]['icon']
-            }
-            forecast.append(weather)
-
-            # Hiển thị thông tin thời tiết kèm hình ảnh
-    for weather in forecast:
-        date = weather['date']
-        temp = weather['temp']
-        desc = weather['description']
-        icon_url = f'http://openweathermap.org/img/w/{weather["icon"]}.png'
-        icon_response = requests.get(icon_url)
-        icon = Image.open(BytesIO(icon_response.content))
-
-        print(f'{date}: {temp}°C - {desc}')
-        icon.show()
-
+def weatherFocast():
+    location = input("Nhập tên thành phố: ")
+    while True:
+        num = input("Nhập số ngày dự đoán: ")
+        if num.isdigit():
+            num_days = int(num)
+            if num_days < 0 or num_days > 5:
+                print('Xin lỗi số ngày quá lớn em không dự đoán được, hãy thử nhập lại số ngày nhỏ hơn 6 giúp em nha')
+            else:
+                break
+        else: print('Ui số ngày nhập phải bằng số em mới hiểu được ạ, vui lòng nhập lại giúp em')
+        
+    complete_api_link = "https://api.openweathermap.org/data/2.5/forecast?q="+location+"&appid="+api_key
+    api_link = requests.get(complete_api_link)
+    api_data = api_link.json()
+    if api_data['cod'] == '404':
+        print('Không tìm thấy địa điểm: {}, hãy kiểm tra lại.'.format(location))
+    else:
+        print("Dự báo thời tiếp tại {} trong {} ngày tới:".format(location, num_days))
+        print("---------------------------------------------------------------------")
+        date_format = "%Y-%m-%d %H:%M:%S"
+        today = datetime.now()
+        for i in range(1, num_days+1):
+            forecast_date = today + timedelta(days=i)
+            forecast_date_str = forecast_date.strftime('%d-%m-%Y')
+            for j in range(len(api_data['list'])):
+                date_time_str = api_data['list'][j]['dt_txt']
+                date_time = datetime.strptime(date_time_str, date_format)
+                if date_time.strftime('%d-%m-%Y') == forecast_date_str:
+                    print("Ngày: ", forecast_date_str)
+                    print("Nhiệt độ trung bình {:.2f}°C".format(api_data['list'][j]['main']['temp'] - 273.15))
+                    print("Áp lực không khí là {} Pascals\nĐộ ẩm là {}%".format(api_data['list'][j]['main']['pressure'],api_data['list'][j]['main']['humidity']))
+                    print("Thời tiết: ", api_data['list'][j]['weather'][0]['description'])
+                    print("---------------------------------------------------------------------")
+                    time.sleep(1)
+                    break
 
 if __name__ == "__main__":
     while True:
@@ -102,5 +120,7 @@ if __name__ == "__main__":
             weatherToday()
         elif 'dự báo' in request:
             weatherForcast()
+        elif 'quá khứ' in request:
+            PastWeather()
         else:
             print('WeatherBot: ', getResponse(request))
