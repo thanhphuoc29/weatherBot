@@ -9,10 +9,10 @@ import chatterbot.corpus
 import sys
 import requests
 import json
-from PIL import Image
-from io import BytesIO
+import random
 from datetime import datetime, timedelta
 import time
+
 
 app = Flask(__name__)
 CORS(app)
@@ -22,9 +22,23 @@ chatbot = ChatBot(
 
 trainer = ChatterBotCorpusTrainer(chatbot)
 
-trainer.train("chatterbot.corpus.Jarvis")
+trainer.train("chatterbot.corpus.weatherbot")
 api_key = "fe8d8c65cf345889139d8e545f57819a"
 location = "none"
+
+dict_place = {}
+list_survive = []
+
+list_province = ['Hòa Bình', 'Sơn La', 'Điện Biên', 'Lai Châu', 'Lào Cai', 'Yên Bái', 'Phú Thọ',
+                 'Hà Giang', 'Tuyên Quang', 'Cao Bằng', 'Bắc Kạn', 'Thái Nguyên', 'Lạng Sơn', 'Bắc Giang',
+                 'Quảng Ninh', 'Hà Nội', 'Bắc Ninh', 'Hà Nam', 'Hải Dương', 'Hải Phòng', 'Hưng Yên',
+                 'Nam Định', 'Thái Bình', 'Vĩnh Phúc', 'Ninh Bình', 'Thanh Hóa', 'Nghệ An', 'Hà Tĩnh',
+                 'Quảng Bình', 'Quảng Trị', 'Huế', 'Đà Nẵng', 'Quảng Nam', 'Quảng Ngãi', 'Bình Định',
+                 'Phú Yên', 'Khánh Hòa', 'Ninh Thuận', 'Bình Thuận', 'Kon Tum', 'Gia Lai', 'Đắk Lắk',
+                 'Lâm Đồng', 'Đà Lạt', 'Hồ Chí Minh', 'Bà Rịa Vũng Tàu', 'Bình Dương', 'Bình Phước',
+                 'Đồng Nai', 'Tây Ninh', 'An Giang', 'Bạc Liêu', 'Bến Tre', 'Cà Mau', 'Cần Thơ',
+                 'Đồng Tháp', 'Hậu Giang', 'Kiên Giang', 'Long An', 'Sóc Trăng', 'Tiền Giang',
+                 'Trà Vinh', 'Vĩnh Long']
 
 
 def getResponse(rq):
@@ -145,6 +159,56 @@ def weatherFocast(location, num_days):
     return content
 
 
+def list_recommended_place():
+    print('collector recommend')
+    ow_url = "http://api.openweathermap.org/data/2.5/weather?"
+    for i in range(20):
+        city = list_province[i]
+        if not city:
+            pass
+        api_key = "fe8d8c65cf345889139d8e545f57819a"
+        call_url = ow_url + "appid=" + api_key + "&q=" + city + "&units=metric"
+        response = requests.get(call_url)
+        data = response.json()
+        content = ""
+        if data["cod"] != "404":
+            city_res = data["main"]
+            current_temperature = city_res["temp"]
+            if current_temperature < 25:
+                continue
+            current_pressure = city_res["pressure"]
+            current_humidity = city_res["humidity"]
+            now = datetime.now()
+            content = """
+            Ngày {day} tháng {month} năm {year}<br>
+            Nhiệt độ trung bình là {temp} độ C<br>
+            Áp lực không khí là {pressure} Pascals<br>
+            Độ ẩm là {humidity}%<br>
+            """.format(day=now.day, month=now.month, year=now.year,
+                       temp=current_temperature, pressure=current_pressure, humidity=current_humidity)
+        else:
+            continue
+        list_survive.append(i)
+        dict_place[list_province[i]] = content
+
+
+list_recommended_place()
+
+
+def recommended_place():
+    n = []
+    content = ''
+    for i in range(3):
+        val = random.choice(list_survive)
+        while val in n:
+            val = random.choice(list_survive)
+        n.append(val)
+        content += '-------------------------------<br>'
+        content += list_province[val] + ':<br>'
+        content += dict_place[list_province[val]] + '<br>'
+    return content
+
+
 @app.route("/")
 def home():
     return render_template("index.html")
@@ -154,6 +218,21 @@ TYPE_SET_LOCATION = 0
 TYPE_SET_FOCAST = 0
 TYPE_SET_PAST = 0
 TYPE_SET_TODAY = 0
+today = ['bây giờ', 'hiện tại', 'ở đây', 'nay', 'hn', 'đang', 'hôm nay']
+past = ['trước', 'qua', 'quá khứ', 'xưa',
+        'đã', 'cách đây', 'ký ức', 'từng', 'cũ']
+future = ['tương lai', 'sau', 'ngày mai', 'kia', 'tiếp theo',
+          'sắp', 'sẽ', 'dự kiến', 'dự đoán', 'dự tính']
+pos = ['nơi khác', 'địa điểm', 'chỗ khác', 'khu vực khác']
+
+travel = ['du lịch', 'đi chơi', 'đi phượt', 'bay lắc']
+
+
+def analysisMessage(list, message):
+    for text in list:
+        if text in message:
+            return True
+    return False
 
 
 @app.route('/respone', methods=['POST'])
@@ -170,7 +249,7 @@ def sendRespone():
     respone = ''
     print('địa điểm: ' + location)
     # --------------------Xem thời tiết hôm nay------------------------------
-    if ('thời tiết' in text or 'hôm nay' in text) or TYPE_SET_TODAY == 1:
+    if analysisMessage(today, text) or TYPE_SET_TODAY == 1:
         if TYPE_SET_TODAY == 1:
             location = text
             respone = weatherToday(location)
@@ -181,7 +260,7 @@ def sendRespone():
         elif location != 'none':
             respone = weatherToday(location)
     # --------------------Xem thời tiết tương lai------------------------------
-    elif ('ngày mai' in text or 'tương lai' in text) or TYPE_SET_FOCAST == 1 or TYPE_SET_FOCAST == 2:
+    elif analysisMessage(future, text) or TYPE_SET_FOCAST == 1 or TYPE_SET_FOCAST == 2:
         if TYPE_SET_FOCAST == 1:
             if location == 'none':
                 location = text
@@ -196,6 +275,9 @@ def sendRespone():
                 else:
                     respone = weatherFocast(location, day_future)
                     TYPE_SET_FOCAST = 0
+            else:
+                respone = 'số ngày này trông hơi lạ nhập lại giúp em -.-'
+                TYPE_SET_FOCAST = 1
         elif location == 'none':
             respone = 'Bạn muốn xem thời tiết ở đâu ạ ^^! (nhập mỗi tên địa điểm giúp iem)'
             TYPE_SET_FOCAST = 1
@@ -205,7 +287,7 @@ def sendRespone():
         elif location != 'none' and day_future != 0:
             respone = weatherFocast(location, day_future)
     # --------------------Xem thời tiết quá khứ------------------------------
-    elif ('hôm qua' in text or 'quá khứ' in text) or TYPE_SET_PAST == 1 or TYPE_SET_PAST == 2:
+    elif analysisMessage(past, text) or TYPE_SET_PAST == 1 or TYPE_SET_PAST == 2:
         if TYPE_SET_PAST == 1:
             if location == 'none':
                 location = text
@@ -220,6 +302,9 @@ def sendRespone():
                 else:
                     respone = PastWeather(location, day_future)
                     TYPE_SET_PAST = 0
+            else:
+                respone = 'số ngày này trông hơi lạ nhập lại giúp em -.-'
+                TYPE_SET_PAST = 1
         elif location == 'none':
             respone = 'Bạn muốn xem thời tiết ở đâu ạ ^^! (nhập mỗi tên địa điểm giúp iem)'
             TYPE_SET_PAST = 1
@@ -227,9 +312,22 @@ def sendRespone():
             respone = 'Bạn muốn xem lại thời tiết cách đây mấy ngày ạ ^^ (nhập số ngày giúp iem)'
             TYPE_SET_PAST = 2
     # --------------------Thay đổi địa điểm xem thời tiết-------------------------------
-    elif 'nơi khác' in text:
-        respone = 'Bạn muốn xem thời tiết ở đâu ạ ^^!'
-    # --------------------Trả lời theo trainning-------------------------------
+    elif analysisMessage(pos, text) or TYPE_SET_LOCATION == 1:
+        if TYPE_SET_LOCATION == 0:
+            respone = 'Bạn muốn xem thời tiết ở đâu ạ ^^! (nhập mỗi tên địa điểm giúp iem)'
+            TYPE_SET_LOCATION = 1
+        else:
+            location = text
+            respone = 'OK ngon rồi đó ạ anh/chị hỏi tiếp đi ạ ^^'
+            TYPE_SET_LOCATION = 0
+    # ----------------------------------recommend địa điểm du lịch
+    elif analysisMessage(travel, text):
+        respone = 'Sau đây là một vài địa điểm du lịch có thời tiết khá là dễ chịu mà em tìm được ^^<br>'
+        respone += recommended_place()
+        respone += '------------------------------<br>'
+        respone += 'Đây đều là những nơi có thời tiết rất là mát mẻ phù hợp để đi chơi, đi phượt, đi chill ><'
+
+        # --------------------Trả lời theo trainning-------------------------------
     else:
         respone = getResponse(text)
     return jsonify({'respone': respone})
@@ -237,3 +335,4 @@ def sendRespone():
 
 if __name__ == "__main__":
     app.run()
+    # list_recommended_place()
